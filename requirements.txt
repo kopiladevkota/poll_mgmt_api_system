@@ -1,0 +1,11 @@
+Django==5.0.3
+djangorestframework==3.14.0
+django-cors-headers==4.3.1
+django-filter==24.2
+drf-yasg==1.21.7
+python-dotenv==1.0.1
+djangorestframework-simplejwt==5.3.0
+django-debug-toolbar==4.2.0
+pytest==8.0.0
+pytest-django==4.7.0
+factory-boy==3.3.0

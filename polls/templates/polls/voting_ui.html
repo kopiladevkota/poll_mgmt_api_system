@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poll Voting System - Kopila Devkota</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .polls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .poll-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s;
+        }
+        
+        .poll-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .poll-title {
+            font-size: 1.3em;
+            color: #333;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        .choice-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .vote-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+        
+        .vote-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+        }
+        
+        .vote-count {
+            font-size: 0.9em;
+            color: #666;
+            margin-left: 10px;
+        }
+        
+        .results-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 10px;
+            width: 100%;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 15px;
+            font-size: 1em;
+            font-weight: bold;
+        }
+        
+        .results-btn:hover {
+            background: #218838;
+        }
+        
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            display: none;
+        }
+        
+        canvas {
+            max-height: 400px;
+        }
+        
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 30px;
+            padding: 20px;
+        }
+        
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 1.2em;
+            padding: 50px;
+        }
+        
+        .message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 8px;
+            color: white;
+            animation: slideIn 0.3s ease;
+            z-index: 1000;
+            font-weight: bold;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .success {
+            background: #28a745;
+        }
+        
+        .error {
+            background: #dc3545;
+        }
+        
+        .info {
+            background: #17a2b8;
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 8px;
+            transition: background 0.3s;
+        }
+        
+        .back-link:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        
+        .refresh-btn {
+            background: #17a2b8;
+            margin-left: 10px;
+        }
+        
+        .refresh-btn:hover {
+            background: #138496;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🗳️ Poll Voting System</h1>
+            <p>Developed by <strong>Kopila Devkota</strong></p>
+            <div>
+                <a href="/" class="back-link">← Back to Home</a>
+                <button class="back-link refresh-btn" onclick="loadPolls()">🔄 Refresh Polls</button>
+            </div>
+        </div>
+        
+        <div id="loading" class="loading">Loading polls from database...</div>
+        <div id="polls-container" class="polls-grid"></div>
+        
+        <div id="chart-container" class="chart-container">
+            <h2>📊 Results Chart</h2>
+            <canvas id="resultsChart"></canvas>
+        </div>
+        
+        <div class="footer">
+            <p>© 2026 - Poll Management System | Developed by Kopila Devkota</p>
+        </div>
+    </div>
+
+    <script>
+        // Use the correct API endpoint
+        const API_BASE = 'http://127.0.0.1:8000/api/v1';
+        let currentChart = null;
+        
+        // Load all polls on page load
+        async function loadPolls() {
+            showMessage('Loading polls from database...', 'info');
+            try {
+                const response = await fetch(`${API_BASE}/polls/`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                const data = await response.json();
+                const polls = data.results || data;
+                displayPolls(polls);
+                document.getElementById('loading').style.display = 'none';
+                showMessage(`Loaded ${polls.length} polls successfully!`, 'success');
+            } catch (error) {
+                console.error('Error loading polls:', error);
+                document.getElementById('loading').innerHTML = `
+                    <div style="background: white; padding: 20px; border-radius: 10px; color: red;">
+                        ❌ Failed to load polls.<br>
+                        Make sure server is running at ${API_BASE}<br>
+                        Error: ${error.message}
+                    </div>
+                `;
+                showMessage('Error loading polls. Check server connection.', 'error');
+            }
+        }
+        
+        // Display polls in cards
+        function displayPolls(polls) {
+            const container = document.getElementById('polls-container');
+            
+            if (!polls || polls.length === 0) {
+                container.innerHTML = `
+                    <div class="poll-card">
+                        <h3>No Polls Available</h3>
+                        <p>Create a poll in the <a href="/admin/">Admin Panel</a> first!</p>
+                        <ol style="margin-top: 15px; text-align: left; padding-left: 20px;">
+                            <li>Go to <a href="/admin/polls/poll/add/">Add Poll</a></li>
+                            <li>Create a title (e.g., "Favorite Food?")</li>
+                            <li>Set Status to "active"</li>
+                            <li>Save, then add choices</li>
+                        </ol>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = polls.map(poll => `
+                <div class="poll-card">
+                    <div class="poll-title">📊 ${escapeHtml(poll.title)}</div>
+                    <div id="choices-${poll.id}">
+                        ${poll.choices ? renderChoices(poll.choices, poll.id) : 'Loading choices...'}
+                    </div>
+                    <button class="results-btn" onclick="showResults(${poll.id})">
+                        📈 Show Results & Chart
+                    </button>
+                </div>
+            `).join('');
+            
+            // Load choices for each poll if not already loaded
+            polls.forEach(poll => {
+                if (!poll.choices) {
+                    loadPollDetails(poll.id);
+                }
+            });
+        }
+        
+        function renderChoices(choices, pollId) {
+            if (!choices || choices.length === 0) {
+                return '<p>No choices available. Add choices in admin panel!</p>';
+            }
+            return choices.map(choice => `
+                <div class="choice-item">
+                    <div>
+                        <strong>${escapeHtml(choice.choice_text)}</strong>
+                        <span class="vote-count">(${choice.vote_count || choice.votes || 0} votes)</span>
+                    </div>
+                    <button class="vote-btn" onclick="vote(${pollId}, ${choice.id})">
+                        🗳️ Vote
+                    </button>
+                </div>
+            `).join('');
+        }
+        
+        async function loadPollDetails(pollId) {
+            try {
+                const response = await fetch(`${API_BASE}/polls/${pollId}/`);
+                if (!response.ok) throw new Error('Failed to load poll details');
+                const poll = await response.json();
+                const choicesDiv = document.getElementById(`choices-${pollId}`);
+                if (choicesDiv && poll.choices) {
+                    choicesDiv.innerHTML = renderChoices(poll.choices, pollId);
+                }
+            } catch (error) {
+                console.error('Error loading poll details:', error);
+            }
+        }
+        
+        async function vote(pollId, choiceId) {
+            showMessage('Submitting your vote...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE}/polls/${pollId}/vote/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ choice_id: choiceId })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showMessage(`✓ ${result.message || 'Vote recorded successfully!'}`, 'success');
+                    // Reload poll details to show updated vote counts
+                    await loadPollDetails(pollId);
+                    // Auto-show results after voting
+                    setTimeout(() => showResults(pollId), 500);
+                } else {
+                    const error = await response.json();
+                    showMessage(`❌ ${error.error || 'Failed to vote'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error voting:', error);
+                showMessage('❌ Error submitting vote. Make sure server is running.', 'error');
+            }
+        }
+        
+        async function showResults(pollId) {
+            showMessage('Loading results from database...', 'info');
+            try {
+                const response = await fetch(`${API_BASE}/polls/${pollId}/results/`);
+                if (!response.ok) throw new Error('Failed to load results');
+                const results = await response.json();
+                displayChart(results);
+                showMessage('Results loaded successfully!', 'success');
+            } catch (error) {
+                console.error('Error loading results:', error);
+                showMessage('Error loading results. Check if poll exists.', 'error');
+            }
+        }
+        
+        function displayChart(results) {
+            const chartContainer = document.getElementById('chart-container');
+            chartContainer.style.display = 'block';
+            
+            const ctx = document.getElementById('resultsChart').getContext('2d');
+            
+            // Destroy existing chart if it exists
+            if (currentChart) {
+                currentChart.destroy();
+            }
+            
+            // Extract data - handle different possible field names
+            const labels = results.choices.map(c => c.text || c.choice_text);
+            const votes = results.choices.map(c => c.votes);
+            const percentages = results.choices.map(c => c.percentage);
+            
+            // Calculate total votes
+            const totalVotes = votes.reduce((a, b) => a + b, 0);
+            
+            currentChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Number of Votes',
+                        data: votes,
+                        backgroundColor: 'rgba(102, 126, 234, 0.7)',
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        borderWidth: 2,
+                        yAxisID: 'y'
+                    }, {
+                        label: 'Percentage (%)',
+                        data: percentages,
+                        backgroundColor: 'rgba(118, 75, 162, 0.5)',
+                        borderColor: 'rgba(118, 75, 162, 1)',
+                        borderWidth: 2,
+                        type: 'line',
+                        yAxisID: 'y1',
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Results: ${results.title}`,
+                            font: { size: 16, weight: 'bold' }
+                        },
+                        subtitle: {
+                            display: true,
+                            text: `Total Votes: ${totalVotes}`,
+                            font: { size: 12 }
+                        },
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) label += ': ';
+                                    label += context.raw;
+                                    if (context.dataset.label.includes('Percentage')) {
+                                        label += '%';
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Number of Votes',
+                                font: { weight: 'bold' }
+                            },
+                            ticks: {
+                                stepSize: 1
+                            }
+                        },
+                        y1: {
+                            position: 'right',
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'Percentage (%)',
+                                font: { weight: 'bold' }
+                            },
+                            grid: {
+                                drawOnChartArea: false
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Scroll to chart
+            chartContainer.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        function showMessage(msg, type) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = msg;
+            document.body.appendChild(messageDiv);
+            
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 3000);
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Load polls when page loads
+        loadPolls();
+        
+        // Auto-refresh every 10 seconds
+        setInterval(() => {
+            loadPolls();
+        }, 10000);
+    </script>
+</body>
+</html>
