@@ -12,7 +12,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Security
 SECRET_KEY = os.getenv('SECRET_KEY')
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.herokuapp.com', '.pythonanywhere.com']
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    '.herokuapp.com',
+    '.pythonanywhere.com',
+    'poll-mgmt-api-system.onrender.com',  # Add your exact Render domain
+    '.onrender.com',  # Or add all Render domains with a wildcard
+]
 
 # Application definition
 INSTALLED_APPS = [
