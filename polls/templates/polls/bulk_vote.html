@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulk Voting - Kopila Devkota</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .poll-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s;
+        }
+        
+        .poll-card:hover {
+            transform: translateY(-3px);
+        }
+        
+        .poll-title {
+            font-size: 1.3em;
+            color: #333;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+        
+        .choice-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .choice-item:hover {
+            background: #e9ecef;
+        }
+        
+        .choice-item.selected {
+            background: #d4edda;
+            border: 2px solid #28a745;
+        }
+        
+        .choice-item input[type="radio"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        
+        .choice-text {
+            flex: 1;
+            font-size: 1.1em;
+        }
+        
+        .vote-count {
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        .bulk-vote-btn {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            margin: 20px 0;
+            width: 100%;
+            transition: transform 0.3s;
+        }
+        
+        .bulk-vote-btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .bulk-vote-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        .message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 8px;
+            color: white;
+            animation: slideIn 0.3s ease;
+            z-index: 1000;
+            font-weight: bold;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .success {
+            background: #28a745;
+        }
+        
+        .error {
+            background: #dc3545;
+        }
+        
+        .info {
+            background: #17a2b8;
+        }
+        
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 1.2em;
+            padding: 50px;
+        }
+        
+        .results {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .results.show {
+            display: block;
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 8px;
+        }
+        
+        .refresh-btn {
+            background: #17a2b8;
+            margin-left: 10px;
+        }
+        
+        .summary {
+            background: white;
+            border-radius: 15px;
+            padding: 15px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .summary h3 {
+            color: #667eea;
+        }
+        
+        .vote-progress {
+            font-size: 1.2em;
+            margin-top: 10px;
+        }
+        
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 30px;
+            padding: 20px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        th {
+            background: #f8f9fa;
+        }
+        
+        .no-polls {
+            text-align: center;
+            padding: 40px;
+            background: white;
+            border-radius: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🗳️ Bulk Voting System</h1>
+            <p>Vote for multiple polls at once - Developed by <strong>Kopila Devkota</strong></p>
+            <div>
+                <a href="/" class="back-link">← Back to Home</a>
+                <button onclick="loadPolls()" class="back-link refresh-btn">🔄 Refresh Polls</button>
+            </div>
+        </div>
+        
+        <div id="summary" class="summary" style="display: none;">
+            <h3>📊 Voting Progress</h3>
+            <div class="vote-progress">
+                Selected: <span id="selectedCount">0</span> / <span id="totalPolls">0</span> polls
+            </div>
+        </div>
+        
+        <div id="loading" class="loading">Loading active polls...</div>
+        <div id="polls-container"></div>
+        
+        <button id="submitBtn" class="bulk-vote-btn" onclick="submitAllVotes()" style="display: none;">
+            ✅ Submit All Votes
+        </button>
+        
+        <div id="results" class="results"></div>
+        
+        <div class="footer">
+            <p>© 2026 - Poll Management System | Developed by Kopila Devkota</p>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://127.0.0.1:8000/api/v1';
+        let activePolls = [];
+        let selectedVotes = {};
+        
+        async function loadPolls() {
+            const loading = document.getElementById('loading');
+            const container = document.getElementById('polls-container');
+            const summary = document.getElementById('summary');
+            const submitBtn = document.getElementById('submitBtn');
+            const resultsDiv = document.getElementById('results');
+            
+            loading.style.display = 'block';
+            container.innerHTML = '';
+            summary.style.display = 'none';
+            submitBtn.style.display = 'none';
+            resultsDiv.style.display = 'none';
+            selectedVotes = {};
+            
+            try {
+                // Fetch all polls
+                const response = await fetch(`${API_BASE}/polls/`);
+                const data = await response.json();
+                const allPolls = data.results || data;
+                
+                // Filter only ACTIVE polls that have choices
+                const activePollsTemp = [];
+                
+                for (const poll of allPolls) {
+                    if (poll.status === 'active') {
+                        // Fetch full poll details including choices
+                        const pollDetailResponse = await fetch(`${API_BASE}/polls/${poll.id}/`);
+                        const fullPoll = await pollDetailResponse.json();
+                        
+                        if (fullPoll.choices && fullPoll.choices.length > 0) {
+                            activePollsTemp.push(fullPoll);
+                        }
+                    }
+                }
+                
+                activePolls = activePollsTemp;
+                
+                if (activePolls.length === 0) {
+                    container.innerHTML = `
+                        <div class="no-polls">
+                            <h3>📭 No Active Polls Available</h3>
+                            <p>There are no active polls with choices. Please create some polls first!</p>
+                            <a href="/bulk/" class="back-link" style="display: inline-block; margin-top: 15px;">📝 Create Polls</a>
+                        </div>
+                    `;
+                    loading.style.display = 'none';
+                    return;
+                }
+                
+                displayPolls(activePolls);
+                loading.style.display = 'none';
+                summary.style.display = 'block';
+                submitBtn.style.display = 'block';
+                document.getElementById('totalPolls').innerText = activePolls.length;
+                updateSelectedCount();
+                
+            } catch (error) {
+                console.error('Error loading polls:', error);
+                container.innerHTML = `
+                    <div class="no-polls">
+                        <h3>❌ Connection Error</h3>
+                        <p>Could not connect to the server. Make sure Django is running.</p>
+                        <button onclick="loadPolls()" class="back-link" style="margin-top: 15px;">Retry</button>
+                    </div>
+                `;
+                loading.style.display = 'none';
+            }
+        }
+        
+        function displayPolls(polls) {
+            const container = document.getElementById('polls-container');
+            container.innerHTML = '';
+            
+            polls.forEach(poll => {
+                const pollCard = document.createElement('div');
+                pollCard.className = 'poll-card';
+                pollCard.innerHTML = `
+                    <div class="poll-title">📊 ${escapeHtml(poll.title)}</div>
+                    <div id="choices-${poll.id}">
+                        ${renderChoices(poll.choices, poll.id)}
+                    </div>
+                `;
+                container.appendChild(pollCard);
+                
+                // Restore previously selected vote if any
+                if (selectedVotes[poll.id]) {
+                    const radio = document.getElementById(`radio_${poll.id}_${selectedVotes[poll.id]}`);
+                    if (radio) {
+                        radio.checked = true;
+                        highlightSelectedChoice(poll.id, selectedVotes[poll.id]);
+                    }
+                }
+            });
+        }
+        
+        function renderChoices(choices, pollId) {
+            if (!choices || choices.length === 0) {
+                return '<p style="color: #999;">No choices available for this poll</p>';
+            }
+            
+            return choices.map(choice => `
+                <div class="choice-item" id="choice-item-${pollId}-${choice.id}" onclick="document.getElementById('radio_${pollId}_${choice.id}').click()">
+                    <input type="radio" 
+                           name="poll_${pollId}" 
+                           id="radio_${pollId}_${choice.id}"
+                           value="${choice.id}"
+                           onchange="selectVote(${pollId}, ${choice.id})">
+                    <span class="choice-text">${escapeHtml(choice.choice_text)}</span>
+                    <span class="vote-count">(${choice.vote_count || 0} votes)</span>
+                </div>
+            `).join('');
+        }
+        
+        function selectVote(pollId, choiceId) {
+            selectedVotes[pollId] = choiceId;
+            highlightSelectedChoice(pollId, choiceId);
+            updateSelectedCount();
+            showMessage(`Selected vote for poll`, 'info');
+        }
+        
+        function highlightSelectedChoice(pollId, choiceId) {
+            const choicesContainer = document.getElementById(`choices-${pollId}`);
+            if (choicesContainer) {
+                const allChoices = choicesContainer.querySelectorAll('.choice-item');
+                allChoices.forEach(choice => {
+                    choice.classList.remove('selected');
+                });
+                
+                const selectedElement = document.getElementById(`choice-item-${pollId}-${choiceId}`);
+                if (selectedElement) {
+                    selectedElement.classList.add('selected');
+                }
+            }
+        }
+        
+        function updateSelectedCount() {
+            const selected = Object.keys(selectedVotes).length;
+            document.getElementById('selectedCount').innerText = selected;
+            
+            const submitBtn = document.getElementById('submitBtn');
+            if (selected === 0) {
+                submitBtn.style.opacity = '0.6';
+            } else {
+                submitBtn.style.opacity = '1';
+            }
+        }
+        
+        async function submitAllVotes() {
+            const votes = [];
+            
+            for (const [pollId, choiceId] of Object.entries(selectedVotes)) {
+                votes.push({
+                    poll_id: parseInt(pollId),
+                    choice_id: parseInt(choiceId)
+                });
+            }
+            
+            if (votes.length === 0) {
+                showMessage('Please select at least one vote', 'error');
+                return;
+            }
+            
+            showMessage(`Submitting ${votes.length} vote(s)...`, 'info');
+            
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/vote/bulk/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ votes: votes })
+                });
+                
+                const data = await response.json();
+                const resultsDiv = document.getElementById('results');
+                
+                if (response.ok) {
+                    resultsDiv.className = 'results show';
+                    resultsDiv.innerHTML = `
+                        <h3>✅ Voting Results</h3>
+                        <p><strong>${data.message}</strong></p>
+                        <div style="margin-top: 15px; overflow-x: auto;">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <thead>
+                                    <tr style="background: #f8f9fa;">
+                                        <th style="padding: 10px; text-align: left;">Poll</th>
+                                        <th style="padding: 10px; text-align: left;">Choice</th>
+                                        <th style="padding: 10px; text-align: left;">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.results.map(r => `
+                                        <tr style="border-bottom: 1px solid #ddd;">
+                                            <td style="padding: 10px;">${escapeHtml(r.poll_title || 'Poll ' + r.poll_id)}</td>
+                                            <td style="padding: 10px;">${escapeHtml(r.choice_text || '-')}</td>
+                                            <td style="padding: 10px; color: ${r.status === 'success' ? '#28a745' : '#dc3545'}; font-weight: bold;">
+                                                ${r.status === 'success' ? '✓ Success' : '✗ ' + (r.error || 'Failed')}
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                        <button onclick="location.reload()" style="margin-top: 15px; padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                            Vote Again
+                        </button>
+                    `;
+                    showMessage('Votes submitted successfully!', 'success');
+                    
+                    // Reset selected votes and reload
+                    setTimeout(() => {
+                        loadPolls();
+                    }, 3000);
+                } else {
+                    resultsDiv.className = 'results show';
+                    resultsDiv.innerHTML = `
+                        <h3>❌ Error</h3>
+                        <p>${data.error || 'Failed to submit votes'}</p>
+                        <pre style="background: #f5f5f5; padding: 10px; margin-top: 10px; overflow-x: auto;">${JSON.stringify(data, null, 2)}</pre>
+                        <button onclick="location.reload()" style="margin-top: 15px; padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                            Try Again
+                        </button>
+                    `;
+                    showMessage('Failed to submit votes', 'error');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showMessage('Network error. Make sure server is running.', 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '✅ Submit All Votes';
+            }
+        }
+        
+        function showMessage(msg, type) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = msg;
+            document.body.appendChild(messageDiv);
+            
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 3000);
+        }
+        
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Load polls when page loads
+        loadPolls();
+    </script>
+</body>
+</html>

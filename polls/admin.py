@@ -52,4 +52,4 @@ admin.site.index_title = "Dashboard"
 
 # Add copyright footer via CSS
 from django.contrib.admin import AdminSite
-AdminSite.index_template = None
+AdminSite.index_template = None 

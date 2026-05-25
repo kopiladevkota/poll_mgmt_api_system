@@ -7,7 +7,7 @@ class ChoiceSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Choice
-        fields = ['id', 'choice_text', 'vote_count', 'order']  # Changed 'votes' to 'vote_count'
+        fields = ['id', 'choice_text', 'vote_count', 'order']
         read_only_fields = ['vote_count']
 
 
@@ -98,7 +98,7 @@ class PollCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Poll
         fields = ['title', 'description', 'choices', 'end_date', 
-                  'is_public', 'allow_multiple_votes']
+                  'is_public', 'allow_multiple_votes', 'status']  # ADDED 'status' HERE
     
     def validate_choices(self, value):
         """Validate at least 2 choices"""
@@ -108,6 +108,7 @@ class PollCreateSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         choices_data = validated_data.pop('choices')
+        # Status will be taken from validated_data (if provided) or use model default
         poll = Poll.objects.create(**validated_data)
         
         for order, choice_data in enumerate(choices_data):
@@ -134,11 +135,11 @@ class PollResultsSerializer(serializers.ModelSerializer):
         choices_data = []
         
         for choice in obj.choices.all():
-            percentage = (choice.vote_count / total * 100) if total > 0 else 0  # Changed 'votes' to 'vote_count'
+            percentage = (choice.vote_count / total * 100) if total > 0 else 0
             choices_data.append({
                 'id': choice.id,
                 'text': choice.choice_text,
-                'votes': choice.vote_count,  # Changed 'votes' to 'vote_count'
+                'votes': choice.vote_count,
                 'percentage': round(percentage, 2),
                 'order': choice.order
             })
@@ -148,3 +149,20 @@ class PollResultsSerializer(serializers.ModelSerializer):
     def get_participation_rate(self, obj):
         """Calculate participation rate (dummy for now)"""
         return 0
+
+
+class BulkPollCreateSerializer(serializers.Serializer):
+    """Serializer for creating multiple polls at once"""
+    
+    number_of_polls = serializers.IntegerField(min_value=1, max_value=10)
+    polls = serializers.ListField(
+        child=PollCreateSerializer(),
+        required=False
+    )
+    
+    def validate_number_of_polls(self, value):
+        if value < 1:
+            raise serializers.ValidationError("At least 1 poll required")
+        if value > 10:
+            raise serializers.ValidationError("Maximum 10 polls at once")
+        return value

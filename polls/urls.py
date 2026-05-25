@@ -12,4 +12,7 @@ urlpatterns = [
     path('polls/<int:poll_id>/vote/', views.VoteView.as_view(), name='vote'),
     path('polls/<int:poll_id>/results/', views.PollResultsView.as_view(), name='results'),
     path('stats/', views.PollStatsView.as_view(), name='stats'),
+    path('polls/bulk/create/', views.BulkPollCreateView.as_view(), name='bulk-poll-create'),
+    path('polls/<int:poll_id>/bulk-vote/', views.BulkVoteView.as_view(), name='bulk-vote'),  
+    path('vote/bulk/', views.MultiPollVoteView.as_view(), name='multi-poll-vote'),
 ]

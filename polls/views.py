@@ -2,7 +2,7 @@ from django.db.models import Sum
 from rest_framework import generics, status, filters
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticatedOrReadOnly, IsAuthenticated
 from rest_framework.throttling import UserRateThrottle, AnonRateThrottle
 from django_filters.rest_framework import DjangoFilterBackend
 from django.shortcuts import get_object_or_404
@@ -102,13 +102,14 @@ class VoteView(APIView):
     """
     Post a vote for a poll choice
     POST: Record a vote for a specific choice in a poll
+    RULE: One user can vote only once per poll
     """
     
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [AllowAny]
     throttle_classes = [UserRateThrottle, AnonRateThrottle]
     
     def post(self, request, poll_id):
-        """Record a vote"""
+        """Record a vote - One vote per user per poll"""
         poll = get_object_or_404(Poll, id=poll_id)
         
         # Check if poll is active
@@ -125,26 +126,51 @@ class VoteView(APIView):
         choice_id = serializer.validated_data['choice_id']
         choice = get_object_or_404(Choice, id=choice_id, poll=poll)
         
-        # Check for duplicate votes (if not allowing multiple votes)
-        if not poll.allow_multiple_votes:
-            existing_vote = None
-            if request.user.is_authenticated:
+        # =============================================
+        # DUPLICATE VOTE PREVENTION - ONE VOTE PER USER
+        # =============================================
+        
+        existing_vote = None
+        
+        if request.user.is_authenticated:
+            # For logged-in users: check by user
+            existing_vote = Vote.objects.filter(
+                poll=poll, 
+                user=request.user
+            ).first()
+        else:
+            # For anonymous users: check by session ID
+            session_id = request.session.session_key
+            if session_id:
                 existing_vote = Vote.objects.filter(
-                    poll=poll, user=request.user
+                    poll=poll, 
+                    session_id=session_id
                 ).first()
-            else:
-                # For anonymous users, check by session/ip
-                session_id = request.session.session_key
-                if session_id:
-                    existing_vote = Vote.objects.filter(
-                        poll=poll, session_id=session_id
-                    ).first()
             
-            if existing_vote:
-                return Response(
-                    {'error': 'You have already voted in this poll'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            # If no session vote, check by IP address (for extra security)
+            if not existing_vote:
+                ip_address = self.get_client_ip(request)
+                existing_vote = Vote.objects.filter(
+                    poll=poll, 
+                    ip_address=ip_address
+                ).first()
+        
+        # If user already voted, reject the new vote
+        if existing_vote:
+            previous_choice = existing_vote.choice
+            return Response({
+                'error': 'You have already voted in this poll',
+                'message': f'You previously voted for: {previous_choice.choice_text}',
+                'previous_vote': {
+                    'choice_id': previous_choice.id,
+                    'choice_text': previous_choice.choice_text,
+                    'voted_at': existing_vote.voted_at
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # =============================================
+        # RECORD THE VOTE
+        # =============================================
         
         # Create vote record
         vote = Vote.objects.create(
@@ -247,7 +273,7 @@ class PollStatsView(APIView):
     def get_most_popular_poll(self):
         """Get poll with most votes"""
         poll = Poll.objects.annotate(
-            vote_count=Sum('choices__votes')
+            vote_count=Sum('choices__vote_count')
         ).order_by('-vote_count').first()
         
         if poll:
@@ -269,3 +295,276 @@ class PollStatsView(APIView):
             'choice_text': vote.choice.choice_text,
             'voted_at': vote.voted_at
         } for vote in recent_votes]
+
+
+class BulkPollCreateView(APIView):
+    """
+    Create multiple polls at once
+    POST: Accepts multiple polls and creates them all
+    """
+    
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        # Get number of polls from request
+        number_of_polls = request.data.get('number_of_polls')
+        polls_data = request.data.get('polls', [])
+        
+        # If number_of_polls provided but no polls data, return template
+        if number_of_polls and not polls_data:
+            return Response({
+                'requires_polls_data': True,
+                'number_of_polls': number_of_polls,
+                'message': f'Please provide data for {number_of_polls} polls'
+            }, status=status.HTTP_200_OK)
+        
+        # If polls data provided, create them
+        if polls_data:
+            created_polls = []
+            errors = []
+            
+            for index, poll_data in enumerate(polls_data):
+                serializer = PollCreateSerializer(data=poll_data)
+                if serializer.is_valid():
+                    poll = serializer.save(
+                        created_by=request.user if request.user.is_authenticated else None
+                    )
+                    created_polls.append({
+                        'id': poll.id,
+                        'title': poll.title,
+                        'status': poll.status,
+                        'choices_count': poll.choices.count()
+                    })
+                else:
+                    errors.append({
+                        'poll_index': index,
+                        'errors': serializer.errors
+                    })
+            
+            return Response({
+                'message': f'Successfully created {len(created_polls)} polls',
+                'created_polls': created_polls,
+                'errors': errors
+            }, status=status.HTTP_201_CREATED if created_polls else status.HTTP_400_BAD_REQUEST)
+        
+        # If neither, return error
+        return Response({
+            'error': 'Please provide number_of_polls or polls data'
+        }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class BulkVoteView(APIView):
+    """
+    Vote for multiple choices in a single poll at once
+    POST: Accepts multiple choice_ids for the same poll
+    RULE: One user can vote only once per poll (only first vote counts)
+    """
+    
+    permission_classes = [AllowAny]
+    
+    def post(self, request, poll_id):
+        poll = get_object_or_404(Poll, id=poll_id)
+        
+        # Check if poll is active
+        if not poll.is_active:
+            return Response(
+                {'error': 'This poll is not active or has ended'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get list of choice IDs from request
+        choice_ids = request.data.get('choice_ids', [])
+        
+        if not choice_ids:
+            return Response(
+                {'error': 'Please provide choice_ids list'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if poll allows multiple votes
+        if len(choice_ids) > 1 and not poll.allow_multiple_votes:
+            return Response(
+                {'error': 'This poll does not allow multiple votes'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # First, check if user already voted in this poll
+        existing_vote = None
+        if request.user.is_authenticated:
+            existing_vote = Vote.objects.filter(poll=poll, user=request.user).first()
+        else:
+            session_id = request.session.session_key
+            if session_id:
+                existing_vote = Vote.objects.filter(poll=poll, session_id=session_id).first()
+        
+        if existing_vote:
+            return Response({
+                'error': 'You have already voted in this poll',
+                'message': f'You previously voted for: {existing_vote.choice.choice_text}',
+                'previous_vote': {
+                    'choice_id': existing_vote.choice.id,
+                    'choice_text': existing_vote.choice.choice_text
+                }
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Track votes (only first vote will be recorded since we already checked above)
+        votes_recorded = []
+        errors = []
+        
+        # Only take the first choice_id if poll doesn't allow multiple votes
+        if not poll.allow_multiple_votes and len(choice_ids) > 1:
+            choice_ids = [choice_ids[0]]
+        
+        for choice_id in choice_ids:
+            try:
+                choice = Choice.objects.get(id=choice_id, poll=poll)
+                
+                # Create vote record
+                vote = Vote.objects.create(
+                    poll=poll,
+                    choice=choice,
+                    user=request.user if request.user.is_authenticated else None,
+                    session_id=request.session.session_key,
+                    ip_address=self.get_client_ip(request)
+                )
+                
+                # Increment choice vote count
+                choice.vote_count += 1
+                choice.save()
+                
+                votes_recorded.append({
+                    'choice_id': choice.id,
+                    'choice_text': choice.choice_text,
+                    'vote_id': vote.id
+                })
+                
+            except Choice.DoesNotExist:
+                errors.append({
+                    'choice_id': choice_id,
+                    'error': 'Choice does not exist'
+                })
+        
+        return Response({
+            'message': f'Successfully recorded {len(votes_recorded)} votes',
+            'votes_recorded': votes_recorded,
+            'errors': errors,
+            'poll_id': poll.id,
+            'poll_title': poll.title
+        }, status=status.HTTP_201_CREATED if votes_recorded else status.HTTP_400_BAD_REQUEST)
+    
+    def get_client_ip(self, request):
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip
+
+
+class MultiPollVoteView(APIView):
+    """
+    Vote for multiple different polls at once
+    POST: Accepts list of {poll_id, choice_id} pairs
+    RULE: One user can vote only once per poll
+    """
+    
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        votes_data = request.data.get('votes', [])
+        
+        if not votes_data:
+            return Response(
+                {'error': 'Please provide votes list'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        results = []
+        
+        for vote_item in votes_data:
+            poll_id = vote_item.get('poll_id')
+            choice_id = vote_item.get('choice_id')
+            
+            try:
+                poll = Poll.objects.get(id=poll_id)
+                choice = Choice.objects.get(id=choice_id, poll=poll)
+                
+                # Check if poll is active
+                if not poll.is_active:
+                    results.append({
+                        'poll_id': poll_id,
+                        'poll_title': poll.title,
+                        'choice_id': choice_id,
+                        'status': 'failed',
+                        'error': 'Poll is not active'
+                    })
+                    continue
+                
+                # Check for existing vote
+                existing_vote = None
+                if request.user.is_authenticated:
+                    existing_vote = Vote.objects.filter(poll=poll, user=request.user).first()
+                else:
+                    session_id = request.session.session_key
+                    if session_id:
+                        existing_vote = Vote.objects.filter(poll=poll, session_id=session_id).first()
+                
+                if existing_vote:
+                    results.append({
+                        'poll_id': poll_id,
+                        'poll_title': poll.title,
+                        'choice_id': choice_id,
+                        'status': 'failed',
+                        'error': f'Already voted for: {existing_vote.choice.choice_text}'
+                    })
+                    continue
+                
+                # Create vote
+                Vote.objects.create(
+                    poll=poll,
+                    choice=choice,
+                    user=request.user if request.user.is_authenticated else None,
+                    session_id=request.session.session_key,
+                    ip_address=self.get_client_ip(request)
+                )
+                
+                # Increment vote count
+                choice.vote_count += 1
+                choice.save()
+                
+                results.append({
+                    'poll_id': poll_id,
+                    'poll_title': poll.title,
+                    'choice_id': choice_id,
+                    'choice_text': choice.choice_text,
+                    'status': 'success'
+                })
+                
+            except Poll.DoesNotExist:
+                results.append({
+                    'poll_id': poll_id,
+                    'status': 'failed',
+                    'error': 'Poll not found'
+                })
+            except Choice.DoesNotExist:
+                results.append({
+                    'poll_id': poll_id,
+                    'choice_id': choice_id,
+                    'status': 'failed',
+                    'error': 'Choice not found'
+                })
+        
+        success_count = len([r for r in results if r.get('status') == 'success'])
+        
+        return Response({
+            'message': f'Voted on {success_count} out of {len(votes_data)} polls',
+            'results': results
+        }, status=status.HTTP_200_OK)
+    
+    def get_client_ip(self, request):
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+        return ip

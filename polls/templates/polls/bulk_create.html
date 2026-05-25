@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulk Poll Creator - Kopila Devkota</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .status-selector {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .status-selector label {
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .status-selector select {
+            padding: 8px 15px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        
+        .status-selector select.active {
+            background: #d4edda;
+            border-color: #28a745;
+            color: #155724;
+        }
+        
+        .status-selector select.draft {
+            background: #fff3cd;
+            border-color: #ffc107;
+            color: #856404;
+        }
+        
+        .poll-form {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .poll-number {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin: 10px 0 5px 0;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        .choice-input {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        
+        .choice-input input {
+            flex: 1;
+            margin: 0;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: transform 0.3s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+        }
+        
+        .add-choice {
+            background: #28a745;
+            font-size: 12px;
+            padding: 5px 15px;
+            margin-top: 10px;
+        }
+        
+        .remove-choice {
+            background: #dc3545;
+            font-size: 12px;
+            padding: 5px 15px;
+            margin-top: 10px;
+            margin-left: 10px;
+        }
+        
+        .submit-btn {
+            background: #28a745;
+            font-size: 18px;
+            padding: 15px 40px;
+            margin-top: 20px;
+            width: 100%;
+        }
+        
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+        
+        .result.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+        
+        .result.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 8px;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+            color: white;
+        }
+        
+        .choices-container {
+            margin: 15px 0;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        
+        .status-badge.active {
+            background: #28a745;
+            color: white;
+        }
+        
+        .status-badge.draft {
+            background: #ffc107;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📝 Bulk Poll Creator</h1>
+            <p>Create multiple polls at once - Developed by <strong>Kopila Devkota</strong></p>
+            <a href="/" class="back-link">← Back to Home</a>
+        </div>
+        
+        <div class="card">
+            <h2>Step 1: How many polls do you want to create?</h2>
+            <input type="number" id="numPolls" min="1" max="10" placeholder="Enter number (1-10)">
+            <button onclick="generateForms()">Generate Poll Forms</button>
+        </div>
+        
+        <div id="formsContainer"></div>
+        <div id="loading" class="loading">Creating polls...</div>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        let pollCount = 0;
+        let globalStatus = 'active'; // Default status
+        
+        function generateForms() {
+            const numPolls = document.getElementById('numPolls').value;
+            
+            if (!numPolls || numPolls < 1 || numPolls > 10) {
+                alert('Please enter a number between 1 and 10');
+                return;
+            }
+            
+            pollCount = parseInt(numPolls);
+            const container = document.getElementById('formsContainer');
+            container.innerHTML = '';
+            
+            // Add global status selector at the top
+            container.innerHTML = `
+                <div class="status-selector">
+                    <label>📌 Default Status for ALL polls:</label>
+                    <select id="globalStatus" onchange="changeGlobalStatus()">
+                        <option value="active" selected>✅ Active (Visible for voting)</option>
+                        <option value="draft">📝 Draft (Hidden from users)</option>
+                    </select>
+                    <span style="font-size: 12px; color: #666;">You can also change individual poll status below</span>
+                </div>
+            `;
+            
+            for (let i = 1; i <= pollCount; i++) {
+                container.innerHTML += `
+                    <div class="poll-form" id="poll-${i}">
+                        <div class="poll-number">
+                            📊 Poll ${i} of ${pollCount}
+                            <select id="status-${i}" class="poll-status" onchange="updateStatusBadge(${i})" style="width: auto; display: inline-block; margin-left: 10px;">
+                                <option value="active">✅ Active</option>
+                                <option value="draft">📝 Draft</option>
+                            </select>
+                        </div>
+                        
+                        <label>Poll Title:</label>
+                        <input type="text" id="title-${i}" placeholder="e.g., Favorite programming language?" required>
+                        
+                        <label>Description (optional):</label>
+                        <textarea id="description-${i}" rows="2" placeholder="Describe your poll..."></textarea>
+                        
+                        <label>Choices (minimum 2):</label>
+                        <div id="choices-${i}" class="choices-container">
+                            <div class="choice-input">
+                                <input type="text" placeholder="Choice 1" class="choice-${i}">
+                            </div>
+                            <div class="choice-input">
+                                <input type="text" placeholder="Choice 2" class="choice-${i}">
+                            </div>
+                        </div>
+                        <button type="button" class="add-choice" onclick="addChoice(${i})">+ Add Choice</button>
+                        <button type="button" class="remove-choice" onclick="removeChoice(${i})">- Remove Last Choice</button>
+                    </div>
+                `;
+            }
+            
+            // Add submit button
+            container.innerHTML += `
+                <button class="submit-btn" onclick="submitAllPolls()">
+                    🚀 Create ${pollCount} Poll${pollCount > 1 ? 's' : ''}
+                </button>
+            `;
+        }
+        
+        function changeGlobalStatus() {
+            globalStatus = document.getElementById('globalStatus').value;
+            // Update all individual poll status dropdowns
+            for (let i = 1; i <= pollCount; i++) {
+                const statusSelect = document.getElementById(`status-${i}`);
+                if (statusSelect) {
+                    statusSelect.value = globalStatus;
+                }
+            }
+        }
+        
+        function updateStatusBadge(pollId) {
+            // Just for visual feedback - no action needed
+            const statusSelect = document.getElementById(`status-${pollId}`);
+            console.log(`Poll ${pollId} status changed to: ${statusSelect.value}`);
+        }
+        
+        function addChoice(pollId) {
+            const choicesContainer = document.getElementById(`choices-${pollId}`);
+            const choiceCount = choicesContainer.children.length + 1;
+            const newChoice = document.createElement('div');
+            newChoice.className = 'choice-input';
+            newChoice.innerHTML = `<input type="text" placeholder="Choice ${choiceCount}" class="choice-${pollId}">`;
+            choicesContainer.appendChild(newChoice);
+        }
+        
+        function removeChoice(pollId) {
+            const choicesContainer = document.getElementById(`choices-${pollId}`);
+            if (choicesContainer.children.length > 2) {
+                choicesContainer.removeChild(choicesContainer.lastChild);
+            } else {
+                alert('Poll must have at least 2 choices!');
+            }
+        }
+        
+        async function submitAllPolls() {
+            const loading = document.getElementById('loading');
+            const resultDiv = document.getElementById('result');
+            loading.style.display = 'block';
+            resultDiv.className = 'result';
+            resultDiv.style.display = 'none';
+            
+            const polls = [];
+            let hasError = false;
+            
+            for (let i = 1; i <= pollCount; i++) {
+                const title = document.getElementById(`title-${i}`).value;
+                const description = document.getElementById(`description-${i}`).value;
+                const status = document.getElementById(`status-${i}`).value;
+                
+                if (!title) {
+                    alert(`Please enter title for Poll ${i}`);
+                    loading.style.display = 'none';
+                    return;
+                }
+                
+                // Get choices
+                const choiceInputs = document.querySelectorAll(`.choice-${i}`);
+                const choices = [];
+                for (let input of choiceInputs) {
+                    if (input.value.trim()) {
+                        choices.push({ choice_text: input.value.trim() });
+                    }
+                }
+                
+                if (choices.length < 2) {
+                    alert(`Poll ${i} needs at least 2 choices!`);
+                    loading.style.display = 'none';
+                    return;
+                }
+                
+                polls.push({
+                    title: title,
+                    description: description || '',
+                    choices: choices,
+                    status: status,  // Use the selected status
+                    is_public: true
+                });
+            }
+            
+            function getCSRFToken() {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, 10) === 'csrftoken=') {
+                            cookieValue = decodeURIComponent(cookie.substring(10));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+            
+            try {
+                const response = await fetch('/api/v1/polls/bulk/create/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCSRFToken(),
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        number_of_polls: pollCount,
+                        polls: polls
+                    })
+                });
+                
+                const data = await response.json();
+                loading.style.display = 'none';
+                
+                if (response.ok) {
+                    resultDiv.className = 'result success';
+                    resultDiv.style.display = 'block';
+                    
+                    // Count how many active vs draft
+                    const activeCount = data.created_polls.filter(p => p.status === 'active').length;
+                    const draftCount = data.created_polls.filter(p => p.status === 'draft').length;
+                    
+                    resultDiv.innerHTML = `
+                        <h3>✅ Success!</h3>
+                        <p>${data.message}</p>
+                        <p><strong>Status Summary:</strong> 
+                           <span style="color: #28a745;">${activeCount} Active</span> | 
+                           <span style="color: #ffc107;">${draftCount} Draft</span>
+                        </p>
+                        <div style="margin-top: 15px;">
+                            <strong>Created Polls:</strong>
+                            <ul>
+                                ${data.created_polls.map(poll => `
+                                    <li>
+                                        <strong>${poll.title}</strong> (ID: ${poll.id}) - 
+                                        Status: ${poll.status === 'active' ? '✅ Active' : '📝 Draft'}
+                                        <a href="/api/v1/polls/${poll.id}/" target="_blank">View</a>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                        <button onclick="location.reload()">Create More Polls</button>
+                        <button onclick="window.location.href='/ui/'">Go to Voting UI</button>
+                    `;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.style.display = 'block';
+                    resultDiv.innerHTML = `
+                        <h3>❌ Error</h3>
+                        <p>${data.error || data.message || 'Failed to create polls'}</p>
+                        ${data.errors ? `
+                            <div style="margin-top: 15px;">
+                                <strong>Errors:</strong>
+                                <ul>
+                                    ${data.errors.map(err => `
+                                        <li>Poll ${err.poll_index + 1}: ${JSON.stringify(err.errors)}</li>
+                                    `).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                        <button onclick="location.reload()">Try Again</button>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                loading.style.display = 'none';
+                resultDiv.className = 'result error';
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = `
+                    <h3>❌ Network Error</h3>
+                    <p>${error.message}</p>
+                    <button onclick="location.reload()">Try Again</button>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>

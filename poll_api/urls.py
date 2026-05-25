@@ -66,6 +66,7 @@ def root_view(request):
                 .link-card:hover { transform: translateY(-5px); box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
                 .link-card h3 { color: #333; margin-bottom: 10px; }
                 .link-card .icon { font-size: 2em; margin-bottom: 10px; }
+                .link-card p { color: #666; font-size: 0.9em; }
                 .method {
                     display: inline-block;
                     padding: 3px 10px;
@@ -116,6 +117,16 @@ def root_view(request):
                         <h3>Voting Interface</h3>
                         <p>User-friendly UI to vote and view charts</p>
                     </a>
+                    <a href="/bulk/" class="link-card">
+                        <div class="icon">📝</div>
+                        <h3>Bulk Poll Creator</h3>
+                        <p>Create multiple polls at once</p>
+                    </a>
+                    <a href="/bulk-vote/" class="link-card">
+                        <div class="icon">🗳️</div>
+                        <h3>Bulk Voting</h3>
+                        <p>Vote for multiple polls at once</p>
+                    </a>
                     <a href="/admin/" class="link-card">
                         <div class="icon">🔧</div>
                         <h3>Admin Panel</h3>
@@ -143,8 +154,16 @@ def root_view(request):
                     <span class="badge">Create poll</span>
                 </div>
                 <div class="endpoint">
+                    <span class="method post">POST</span> /api/v1/polls/bulk/create/
+                    <span class="badge">Create multiple polls</span>
+                </div>
+                <div class="endpoint">
                     <span class="method post">POST</span> /api/v1/polls/&lt;id&gt;/vote/
                     <span class="badge">Submit vote</span>
+                </div>
+                <div class="endpoint">
+                    <span class="method post">POST</span> /api/v1/polls/&lt;id&gt;/bulk-vote/
+                    <span class="badge">Bulk vote in poll</span>
                 </div>
                 <div class="endpoint">
                     <span class="method get">GET</span> /api/v1/polls/&lt;id&gt;/results/
@@ -162,10 +181,12 @@ def root_view(request):
         content_type="text/html; charset=utf-8"
     )
 
-# Configure URL patterns - THE UI ROUTE MUST BE HERE
+# Configure URL patterns
 urlpatterns = [
     path('', root_view, name='root'),
-    path('ui/', TemplateView.as_view(template_name='polls/voting_ui.html'), name='voting-ui'),  # THIS LINE IS CRITICAL
+    path('ui/', TemplateView.as_view(template_name='polls/voting_ui.html'), name='voting-ui'),
+    path('bulk/', TemplateView.as_view(template_name='polls/bulk_create.html'), name='bulk-create'),
+    path('bulk-vote/', TemplateView.as_view(template_name='polls/bulk_vote.html'), name='bulk-vote-ui'),
     path('admin/', admin.site.urls),
     path('api/v1/', include('polls.urls')),
 ]
