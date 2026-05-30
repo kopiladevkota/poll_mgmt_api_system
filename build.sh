@@ -15,7 +15,7 @@ python manage.py shell << EOF
 from django.contrib.auth import get_user_model;
 User = get_user_model();
 if not User.objects.filter(username='Kopila').exists():
-    User.objects.create_superuser('Kopila', 'opiladevkot7@gmail.com', '1234')
+    User.objects.create_superuser('Kopila', 'kopiladevkot7@gmail.com', '1234')
     print('✅ Superuser "Kopila" created!')
 else:
     print('✅ Superuser "kopila" already exists.')
